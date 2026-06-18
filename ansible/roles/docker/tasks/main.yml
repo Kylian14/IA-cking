@@ -1,0 +1,29 @@
+---
+- name: Installer Docker via apt (docker.io + compose v2)
+  ansible.builtin.apt:
+    name:
+      - docker.io
+      - docker-compose-v2
+      - docker-buildx
+    state: present
+    install_recommends: false
+
+- name: Docker actif au démarrage
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Ajoute {{ workshop_user }} au groupe docker
+  ansible.builtin.user:
+    name: "{{ workshop_user }}"
+    groups: docker
+    append: true
+
+- name: Sanity check Docker
+  ansible.builtin.command: docker --version
+  changed_when: false
+
+- name: Sanity check docker compose v2
+  ansible.builtin.command: docker compose version
+  changed_when: false

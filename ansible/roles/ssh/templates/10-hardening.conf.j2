@@ -1,0 +1,11 @@
+# Durcissement SSH de l'atelier, pris en compte avant les autres drop-ins (50-*).
+Port 22
+PermitRootLogin no
+PasswordAuthentication no
+PubkeyAuthentication yes
+KbdInteractiveAuthentication no
+X11Forwarding no
+AllowUsers {{ workshop_user }}
+MaxAuthTries 3
+LoginGraceTime 20
+ClientAliveInterval 300

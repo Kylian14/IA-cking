@@ -1,0 +1,73 @@
+# Variables pour le groupe `workshop`.
+# Copie ce fichier vers `group_vars/workshop.yml` puis adapte à ton hôte.
+
+# ──────────────────────────────────────────────────────────────────────
+# Utilisateur et chemins
+# ──────────────────────────────────────────────────────────────────────
+workshop_user:   atelier
+workshop_dir:    "/home/{{ workshop_user }}/atelier"
+credentials_dir: "/home/{{ workshop_user }}/.iacking"
+
+# ──────────────────────────────────────────────────────────────────────
+# Repo de l'atelier (remplace par ton fork si besoin)
+# ──────────────────────────────────────────────────────────────────────
+workshop_repo:   "https://github.com/Kylian14/IA-cking.git"
+workshop_branch: main
+
+# ──────────────────────────────────────────────────────────────────────
+# Réseau : À ADAPTER à ta machine, ces valeurs sont des exemples.
+#   - lan_iface / wan_iface : noms d'interfaces (voir `ip -br link`).
+#   - lan_subnet / nuc_lan_ip : ton sous-réseau LAN et l'IP de l'hôte.
+# Utilisés par le rôle firewall (seulement si enable_firewall: true) et par
+# les SAN du certificat TLS auto-signé.
+# ──────────────────────────────────────────────────────────────────────
+lan_iface:  "eth0"
+wan_iface:  "wan0"
+lan_subnet: "10.0.0.0/24"
+nuc_lan_ip: "10.0.0.10"
+
+# Pour restreindre SSH / admin à certaines IP, réintroduire une allowlist
+# dans roles/firewall/templates/nftables.conf.j2, par ex. :
+# admin_ip_allowlist:
+#   - "10.0.0.3"
+#   - "10.0.0.50-10.0.0.59"
+
+# ──────────────────────────────────────────────────────────────────────
+# Ports
+# ──────────────────────────────────────────────────────────────────────
+# Ports internes du conteneur nginx
+student_port:      8000
+admin_port:        8001
+# Port hôte exposé aux participants (HTTPS, URL : https://<IP>/)
+student_host_port: 443
+
+# ──────────────────────────────────────────────────────────────────────
+# TLS (cert auto-signé pour chiffrer le trafic LAN)
+# ──────────────────────────────────────────────────────────────────────
+ssl_dir:        /etc/iacking/ssl
+ssl_cert_days:  365
+ssl_cn:         "IA'cking Workshop"
+ssl_san_list:
+  - "IP:{{ nuc_lan_ip }}"
+  - "IP:127.0.0.1"
+  - "DNS:localhost"
+
+# ──────────────────────────────────────────────────────────────────────
+# Firewall
+# ──────────────────────────────────────────────────────────────────────
+# Activer le firewall (nftables policy drop) seulement une fois les
+# interfaces/IP ci-dessus correctement renseignées, sinon vous coupez
+# votre propre accès SSH.
+enable_firewall: false
+
+# ──────────────────────────────────────────────────────────────────────
+# Quotas atelier (.env)
+# ──────────────────────────────────────────────────────────────────────
+chat_rate_limit:        "15/minute"
+login_rate_limit:       "10/minute"
+admin_login_rate_limit: "10/minute"
+verify_rate_limit:      "5/minute"
+max_llm_calls_per_session: 200
+history_max_pairs:      10
+session_ttl_seconds:    14400
+log_level:              INFO

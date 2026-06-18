@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0b">
+<title>IA'cking : Atelier</title>
+<link rel="stylesheet" href="/static/fonts.css">
+<link rel="stylesheet" href="/static/style.css?v=1779215707">
+</head>
+<body>
+
+<!-- ============== LOGIN ============== -->
+<div id="page-login" class="login-wrap">
+  <div class="login-poster">
+    <div class="upper">Atelier · IA'cking</div>
+    <div>
+      <h1 class="login-poster-title">
+        Mettre à l'épreuve<br>
+        <em>un LLM.</em>
+      </h1>
+      <p class="login-poster-sub">
+        Sept niveaux d'attaque pour comprendre comment un grand modèle de
+        langage défend ou trahit un secret.
+      </p>
+    </div>
+  </div>
+
+  <div class="login-form-panel">
+    <div class="login-form">
+      <div class="upper" style="margin-bottom: 24px;">$ accès participant<span class="caret"></span></div>
+      <h2 class="login-title">Identifie-toi.</h2>
+      <p class="login-sub">On t'a remis un token. Il restera valide pendant toute la session.</p>
+
+      <div class="field">
+        <label for="login-token">Token · 6 chiffres</label>
+        <input id="login-token" type="text" inputmode="numeric" maxlength="6"
+               pattern="[0-9]{6}" autocomplete="off" placeholder="000000"
+               style="font-family: var(--mono); font-size: 28px; letter-spacing: 0.4em;">
+      </div>
+      <div class="field">
+        <label for="login-name">Prénom · visible sur le tableau</label>
+        <input id="login-name" type="text" maxlength="50" autocomplete="off"
+               placeholder="Camille"
+               style="font-family: var(--display); font-size: 26px;">
+      </div>
+
+      <div id="login-error" class="error hidden"></div>
+
+      <div class="login-actions">
+        <button id="login-submit" class="btn btn-pri">Entrer dans l'atelier →</button>
+      </div>
+
+      <!-- Visible si cookie admin détecté côté serveur -->
+      <div id="demo-access" class="login-demo-cta hidden">
+        <span class="login-demo-divider">ou</span>
+        <a href="/demo" class="btn btn-ghost btn-sm login-demo-link">↗ Accéder à la démo</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============== SELECTEUR DE NIVEAU ============== -->
+<div id="page-levels" class="hidden">
+  <div class="header">
+    <div>
+      <span class="brand">IA<em>'cking</em></span>
+      <span class="brand-sub" id="hello-name"></span>
+    </div>
+    <button id="logout-btn" class="btn-ghost">Déconnexion</button>
+  </div>
+
+  <section class="section">
+    <div class="section-head">
+      <div style="max-width: 720px;">
+        <div class="upper section-kicker">Sept épreuves · un secret par niveau</div>
+        <h1>
+          <em>Sept épreuves.</em>
+          <span class="muted-tail"> Un secret à extraire à chaque fois.</span>
+        </h1>
+        <p class="section-sub">
+          La progression est linéaire. Tu débloques l'épreuve suivante quand tu valides la précédente.
+        </p>
+      </div>
+      <div class="section-right">
+        <div class="upper" style="margin-bottom: 8px;">Progression</div>
+        <div class="num"><span id="progress-num">0</span><span class="denom" id="progress-denom">/0</span></div>
+      </div>
+    </div>
+    <div id="levels-grid" class="levels-grid"></div>
+  </section>
+</div>
+
+<!-- ============== CHAT ============== -->
+<div id="page-chat" class="hidden">
+  <div class="header">
+    <div>
+      <span class="brand">IA<em>'cking</em></span>
+    </div>
+    <button id="logout-btn-chat" class="btn-ghost" onclick="document.getElementById('logout-btn').click()">Déconnexion</button>
+  </div>
+
+  <div class="chat-shell">
+    <header class="chat-sticky-top">
+      <button id="back-btn" class="btn btn-ghost btn-sm chat-back">← Niveaux</button>
+      <div class="chat-sticky-info">
+        <span class="num-dec">épreuve <span id="chat-num"></span> / <span id="chat-total">07</span></span>
+        <h2 class="chat-title" id="chat-name"></h2>
+      </div>
+      <div class="chat-actions">
+        <span id="msg-counter" class="upper">0 msg</span>
+        <button id="model-toggle" class="btn btn-sm">Modèle</button>
+        <span id="model-badge" class="hidden" style="font-family: var(--mono); font-size: 11px; color: var(--accent); align-self: center;"></span>
+        <button id="hint-toggle" class="btn btn-sm">Indice</button>
+        <button id="help-btn" class="btn btn-sm btn-help" title="Appeler l'encadrant à l'aide">✋ Aide</button>
+      </div>
+    </header>
+    <p class="chat-desc" id="chat-desc"></p>
+
+    <div id="chat-window" class="chat-window"></div>
+
+    <div class="chat-input-wrap">
+      <button id="scroll-bottom-btn" class="scroll-bottom-btn hidden" aria-label="Aller en bas" title="Aller en bas de la conversation">↓</button>
+      <label for="chat-input">Ton message au modèle</label>
+      <div class="chat-input">
+        <textarea id="chat-input" placeholder="Écris ton attaque… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne)" maxlength="2000"></textarea>
+        <button id="send-btn" class="btn btn-pri">Envoyer</button>
+      </div>
+      <div class="chat-foot">
+        <span id="char-counter">0 / 2000</span>
+        <span>objectif · faire fuiter le secret</span>
+      </div>
+    </div>
+
+    <button id="verify-toggle" class="verify-toggle-btn" type="button" aria-expanded="false" aria-controls="verify-box">
+      🔑 Valider le secret
+    </button>
+    <div class="verify-box" id="verify-box" title="Valide ici le secret extrait, forme MOT-XXXX">
+      <div class="verify-head"><div class="upper">secret →</div></div>
+      <input id="verify-input" type="text" placeholder="MOT-XXXX" autocomplete="off">
+      <button id="verify-btn" class="btn btn-pri">Valider</button>
+      <div id="verify-result" class="verify-result"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============== SUCCESS OVERLAY ============== -->
+<div id="success-overlay" class="success-overlay hidden">
+  <div class="success-banner">
+    <h1>Niveau résolu.</h1>
+    <p id="success-msg">Le secret est tombé. Retour aux niveaux dans 3s.</p>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  Helpers
+// ============================================================
+const $ = (id) => document.getElementById(id);
+const show = (id) => $(id).classList.remove('hidden');
+const hide = (id) => $(id).classList.add('hidden');
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+  });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail || detail; } catch {}
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
+const STORAGE_MODEL_REVEAL = 'workshop_model_reveal';
+
+// ============================================================
+//  State
+// ============================================================
+let currentLevelId = null;
+let currentLevels = [];
+let ws = null;
+
+// ============================================================
+//  LOGIN
+// ============================================================
+async function tryRestoreSession() {
+  try {
+    const me = await api('/api/me');
+    await enterApp(me.name);
+  } catch {
+    show('page-login');
+    checkAdminAccess();
+  }
+}
+
+// Si un cookie admin valide est détecté, on propose un raccourci démo
+// sur le panneau de login élève (sans masquer le formulaire token/prénom).
+async function checkAdminAccess() {
+  try {
+    const r = await api('/api/can-demo');
+    if (r.admin) $('demo-access').classList.remove('hidden');
+  } catch {}
+}
+
+$('login-submit').addEventListener('click', login);
+$('login-token').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('login-name').focus(); });
+$('login-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
+$('login-token').addEventListener('input', (e) => {
+  e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
+});
+
+async function login() {
+  $('login-error').classList.add('hidden');
+  const token = $('login-token').value.trim();
+  const name = $('login-name').value.trim();
+  if (token.length !== 6) {
+    showError('Le token doit faire 6 chiffres.');
+    return;
+  }
+  if (!name) { showError('Renseigne ton prénom.'); return; }
+  try {
+    const r = await api('/api/login', { method: 'POST', body: JSON.stringify({ token, name }) });
+    await enterApp(r.name);
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+function showError(msg) {
+  const el = $('login-error');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+async function enterApp(name) {
+  hide('page-login');
+  show('page-levels');
+  $('hello-name').textContent = `session · ${name}`;
+  await loadLevels();
+  openWebSocket();
+}
+
+$('logout-btn').addEventListener('click', async () => {
+  if (ws) { ws.close(); ws = null; }
+  try { await api('/api/logout', { method: 'POST' }); } catch {}
+  location.reload();
+});
+
+// ============================================================
+//  LEVELS
+// ============================================================
+async function loadLevels() {
+  const r = await api('/api/levels');
+  currentLevels = r.levels;
+  renderLevels();
+}
+
+function renderLevels() {
+  const grid = $('levels-grid');
+  grid.innerHTML = '';
+  let nextOpen = null;
+  let solvedCount = 0;
+  for (const lvl of currentLevels) {
+    if (lvl.solved) solvedCount++;
+    if (!lvl.solved && lvl.unlocked && nextOpen === null) nextOpen = lvl.id;
+  }
+  $('progress-num').textContent = solvedCount;
+  $('progress-denom').textContent = `/${currentLevels.length}`;
+  $('chat-total').textContent = String(currentLevels.length).padStart(2, '0');
+
+  let idx = 0;
+  for (const lvl of currentLevels) {
+    const card = document.createElement('div');
+    let cls = 'level-card lift';
+    let status = 'ouvert';
+    let pillCls = 'open';
+    if (!lvl.unlocked) { cls += ' locked'; status = 'verrouillé'; pillCls = 'locked'; }
+    else if (lvl.solved) { cls += ' solved'; status = 'résolu'; pillCls = 'solved'; }
+    else if (lvl.id === nextOpen) { cls += ' current'; status = 'en cours'; pillCls = 'current'; }
+    card.className = cls;
+    card.style.setProperty('--i', idx++);
+    card.innerHTML = `
+      <div class="level-card-head">
+        <div class="num-dec">${String(lvl.id).padStart(2, '0')} / ${String(currentLevels.length).padStart(2, '0')}</div>
+        <span class="pill ${pillCls}">${status}</span>
+      </div>
+      <div class="level-card-body">
+        <h3 class="level-name">${escape(lvl.name)}</h3>
+        <p class="level-desc">${escape(lvl.description)}</p>
+      </div>
+      <div class="level-card-foot">
+        <div class="level-tags">épreuve ${String(lvl.id).padStart(2, '0')}</div>
+        <div class="level-time">${lvl.solved ? '✓' : '-'}</div>
+      </div>
+    `;
+    if (lvl.unlocked) {
+      card.addEventListener('click', () => openLevel(lvl.id));
+    } else {
+      card.addEventListener('click', () => alert("Termine d'abord le niveau précédent."));
+    }
+    grid.appendChild(card);
+  }
+}
+
+function escape(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ============================================================
+//  CHAT
+// ============================================================
+async function openLevel(id) {
+  currentLevelId = id;
+  const lvl = currentLevels.find(l => l.id === id);
+  hide('page-levels');
+  show('page-chat');
+  $('chat-num').textContent = String(id).padStart(2, '0');
+  $('chat-name').textContent = lvl.name;
+  $('chat-desc').textContent = lvl.description || '';
+  $('chat-window').innerHTML = '';
+  $('verify-input').value = '';
+  $('verify-result').textContent = '';
+  $('verify-result').className = 'verify-result';
+  $('chat-input').value = '';
+  updateCharCounter();
+
+  $('model-badge').textContent = '';
+  $('model-badge').classList.add('hidden');
+  $('model-toggle').textContent = 'Afficher le modèle';
+  $('hint-toggle').disabled = false;
+  $('hint-toggle').textContent = "Voir l'indice";
+
+  await loadMessages();
+
+  if (localStorage.getItem(STORAGE_MODEL_REVEAL) === '1') {
+    await revealModel();
+  }
+  $('chat-input').focus();
+}
+
+async function loadMessages() {
+  const r = await api(`/api/levels/${currentLevelId}/messages`);
+  $('chat-window').innerHTML = '';
+  for (const m of r.messages) appendBubble(m.role, m.content);
+  updateMsgCounter(r.messages);
+  scrollChatToBottom();
+}
+
+function appendBubble(role, content) {
+  if (role === 'hint') {
+    const div = document.createElement('div');
+    div.className = 'bubble bubble-hint';
+    div.textContent = content;
+    $('chat-window').appendChild(div);
+    scrollChatToBottom();
+    return div;
+  }
+  const row = document.createElement('div');
+  row.className = `bubble-row ${role}`;
+  const label = document.createElement('div');
+  label.className = 'bubble-label';
+  label.textContent = role === 'user' ? '→ toi' : '← assistant';
+  const bubble = document.createElement('div');
+  bubble.className = `bubble bubble-${role}`;
+  if (role === 'assistant' && content.includes('\n') && /^[A-Za-z_-]+:/m.test(content)) {
+    bubble.classList.add('mono-content');
+  }
+  bubble.textContent = content;
+  row.appendChild(label);
+  row.appendChild(bubble);
+  $('chat-window').appendChild(row);
+  scrollChatToBottom();
+  return row;
+}
+
+function updateMsgCounter(messages) {
+  const n = messages.filter(m => m.role === 'user' || m.role === 'assistant').length;
+  $('msg-counter').textContent = `${n} message${n > 1 ? 's' : ''}`;
+}
+
+function scrollChatToBottom() {
+  const w = $('chat-window');
+  w.scrollTop = w.scrollHeight;
+  updateScrollBtn();
+}
+
+function isChatAtBottom() {
+  const w = $('chat-window');
+  return w.scrollHeight - w.scrollTop - w.clientHeight < 80;
+}
+
+function updateScrollBtn() {
+  const btn = $('scroll-bottom-btn');
+  if (!btn) return;
+  btn.classList.toggle('hidden', isChatAtBottom() || !$('chat-window').children.length);
+}
+
+$('chat-window').addEventListener('scroll', updateScrollBtn, { passive: true });
+$('scroll-bottom-btn').addEventListener('click', () => {
+  const w = $('chat-window');
+  w.scrollTo({ top: w.scrollHeight, behavior: 'smooth' });
+});
+
+// Send
+$('back-btn').addEventListener('click', async () => {
+  hide('page-chat');
+  show('page-levels');
+  await loadLevels();
+});
+
+$('chat-input').addEventListener('input', updateCharCounter);
+$('chat-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+$('send-btn').addEventListener('click', sendMessage);
+
+function updateCharCounter() {
+  const v = $('chat-input').value;
+  $('char-counter').textContent = `${v.length} / 2000`;
+}
+
+let sending = false;
+async function sendMessage() {
+  if (sending) return;
+  const text = $('chat-input').value.trim();
+  if (!text) return;
+  sending = true;
+  $('send-btn').disabled = true;
+  appendBubble('user', text);
+  $('chat-input').value = '';
+  updateCharCounter();
+  const thinking = document.createElement('div');
+  thinking.className = 'thinking';
+  thinking.textContent = 'Le modèle réfléchit';
+  $('chat-window').appendChild(thinking);
+  scrollChatToBottom();
+  try {
+    const r = await api(`/api/levels/${currentLevelId}/chat`, {
+      method: 'POST',
+      body: JSON.stringify({ message: text }),
+    });
+    thinking.remove();
+    appendBubble('assistant', r.reply);
+  } catch (e) {
+    thinking.remove();
+    appendBubble('assistant', '[ERREUR] ' + e.message);
+  } finally {
+    sending = false;
+    $('send-btn').disabled = false;
+    $('chat-input').focus();
+    const r = await api(`/api/levels/${currentLevelId}/messages`);
+    updateMsgCounter(r.messages);
+  }
+}
+
+// Verify
+$('verify-input').addEventListener('input', (e) => {
+  e.target.value = e.target.value.toUpperCase();
+});
+$('verify-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') verifySecret();
+});
+$('verify-btn').addEventListener('click', verifySecret);
+
+async function verifySecret() {
+  const guess = $('verify-input').value.trim();
+  if (!guess) return;
+  $('verify-result').textContent = '';
+  $('verify-result').className = 'verify-result';
+  try {
+    const r = await api(`/api/levels/${currentLevelId}/verify`, {
+      method: 'POST',
+      body: JSON.stringify({ guess }),
+    });
+    if (r.correct) {
+      showSuccess();
+    } else {
+      const el = $('verify-result');
+      el.textContent = 'Pas tout à fait. Relis la dernière réponse du modèle.';
+      el.className = 'verify-result ko';
+    }
+  } catch (e) {
+    const el = $('verify-result');
+    el.textContent = e.message;
+    el.className = 'verify-result ko';
+  }
+}
+
+function showSuccess() {
+  show('success-overlay');
+  setTimeout(async () => {
+    hide('success-overlay');
+    hide('page-chat');
+    show('page-levels');
+    await loadLevels();
+  }, 3000);
+}
+
+// Hint
+$('hint-toggle').addEventListener('click', async () => {
+  try {
+    const r = await api(`/api/levels/${currentLevelId}/hint`);
+    appendBubble('hint', r.hint);
+    $('hint-toggle').disabled = true;
+    $('hint-toggle').textContent = 'Indice affiché';
+  } catch (e) {
+    alert(e.message);
+  }
+});
+
+// Demande d'aide → notifie l'encadrant via WS admin.
+// Le bouton se réarme soit après 60s (cooldown anti-spam visuel), soit
+// dès que l'encadrant acquitte (WS event `help_acquitted` ci-dessous).
+let helpCooldownTimer = null;
+const HELP_LABEL = '✋ Aide';
+
+function resetHelpBtn() {
+  const btn = $('help-btn');
+  if (!btn) return;
+  if (helpCooldownTimer) { clearTimeout(helpCooldownTimer); helpCooldownTimer = null; }
+  btn.disabled = false;
+  btn.textContent = HELP_LABEL;
+  btn.classList.remove('btn-help-sent');
+}
+
+$('help-btn').addEventListener('click', async () => {
+  const btn = $('help-btn');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  try {
+    await api(`/api/levels/${currentLevelId}/help`, { method: 'POST' });
+    btn.textContent = '✓ Aide demandée';
+    btn.classList.add('btn-help-sent');
+    helpCooldownTimer = setTimeout(resetHelpBtn, 60000); // 1 min max
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = HELP_LABEL;
+    alert(e.message);
+  }
+});
+
+// Bouton mobile : afficher / cacher la zone de validation du secret.
+// Sur PC le bouton est masqué par CSS et la verify-box est toujours visible.
+$('verify-toggle').addEventListener('click', () => {
+  const btn = $('verify-toggle');
+  const wasOpen = btn.getAttribute('aria-expanded') === 'true';
+  btn.setAttribute('aria-expanded', String(!wasOpen));
+  btn.textContent = wasOpen ? '🔑 Valider le secret' : '✕ Fermer';
+  if (!wasOpen) {
+    // Petit délai pour laisser la verify-box s'afficher avant le focus.
+    setTimeout(() => $('verify-input').focus({ preventScroll: false }), 60);
+  }
+});
+
+// Model reveal toggle
+$('model-toggle').addEventListener('click', async () => {
+  if ($('model-badge').classList.contains('hidden')) {
+    await revealModel();
+    localStorage.setItem(STORAGE_MODEL_REVEAL, '1');
+  } else {
+    $('model-badge').classList.add('hidden');
+    $('model-toggle').textContent = 'Afficher le modèle';
+    localStorage.setItem(STORAGE_MODEL_REVEAL, '0');
+  }
+});
+
+async function revealModel() {
+  const r = await api(`/api/levels/${currentLevelId}/model`);
+  $('model-badge').textContent = r.model;
+  $('model-badge').classList.remove('hidden');
+  $('model-toggle').textContent = 'Cacher le modèle';
+}
+
+// ============================================================
+//  WEBSOCKET (indices push)
+// ============================================================
+let wsRetries = 0;
+function openWebSocket() {
+  if (ws) return;
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/api/ws`);
+  ws.onopen = () => { wsRetries = 0; };
+  ws.onmessage = (ev) => {
+    try {
+      const data = JSON.parse(ev.data);
+      if (typeof data.event !== 'string') return;
+      if (data.event === 'hint' && data.level_id === currentLevelId) {
+        appendBubble('hint', String(data.message?.content ?? ''));
+      }
+      if (data.event === 'help_acquitted') {
+        // L'encadrant a pris la demande en charge → on réarme le bouton.
+        resetHelpBtn();
+      }
+      if (data.event === 'level_reset') {
+        if (currentLevelId === data.level_id && !$('page-chat').classList.contains('hidden')) {
+          alert("Ce niveau a été réinitialisé par un encadrant. Tu vas être renvoyé au sélecteur de niveaux.");
+          hide('page-chat');
+          show('page-levels');
+          loadLevels();
+        }
+      }
+    } catch {}
+  };
+  ws.onclose = () => {
+    ws = null;
+    const delay = Math.min(30000, 1000 * Math.pow(2, wsRetries++));
+    setTimeout(openWebSocket, delay);
+  };
+}
+
+// ============================================================
+//  GO
+// ============================================================
+tryRestoreSession();
+</script>
+</body>
+</html>

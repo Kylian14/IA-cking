@@ -1,0 +1,12 @@
+[DEFAULT]
+bantime  = 1h
+findtime = 10m
+maxretry = 4
+
+[sshd]
+enabled = true
+port    = 22
+logpath = %(sshd_log)s
+
+[nginx-noscript]
+enabled = false

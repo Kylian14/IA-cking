@@ -1,0 +1,80 @@
+services:
+  backend:
+    # `image` + `build` : `docker compose build` tague l'image sous ce nom,
+    # `docker compose pull` la récupère depuis GHCR (déploiement sans build).
+    image: ghcr.io/kylian14/ia-cking-backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: workshop-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      HOST: "0.0.0.0"
+      STUDENT_PORT: "8000"
+      ADMIN_PORT: "8001"
+      DB_PATH: "/app/data/workshop.db"
+      CHEATSHEET_PATH: "/app/CHEATSHEET.md"
+      # Mettre SECURE_COOKIES=1 derrière HTTPS en prod.
+      SECURE_COOKIES: "${SECURE_COOKIES:-0}"
+    volumes:
+      - ./data:/app/data
+      - ./CHEATSHEET.md:/app/CHEATSHEET.md:ro
+    expose:
+      - "8000"
+      - "8001"
+    networks:
+      - workshop
+    # M6 : healthcheck défini dans le Dockerfile
+    # Hardening : pas de privilèges supplémentaires, FS root en lecture seule
+    # (data/ est en volume RW, /tmp en tmpfs).
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Limites anti-DoS local (fork-bomb / OOM dans un container compromis)
+    mem_limit: 512m
+    pids_limit: 256
+
+  frontend:
+    image: ghcr.io/kylian14/ia-cking-frontend:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: workshop-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      # Dev : http://localhost:8000 (élève) + http://localhost:8001 (admin).
+      # Déploiement LAN/prod : Ansible pose STUDENT_HOST_PORT=443 dans .env.
+      - "${STUDENT_HOST_PORT:-8000}:8000"   # élève
+      - "${ADMIN_HOST_PORT:-8001}:8001"     # admin
+    networks:
+      - workshop
+    # Hardening aligné sur le backend : FS root en lecture seule, aucune
+    # capability, pas d'escalade de privilèges. nginx écrit uniquement dans
+    # les tmpfs ci-dessous (cache/temp, pid, logs).
+    read_only: true
+    # mode=1777 : nginx tourne en utilisateur non-root et doit pouvoir créer
+    # ses fichiers temp/pid/logs dans ces tmpfs éphémères.
+    tmpfs:
+      - /var/cache/nginx:size=16m,mode=1777
+      - /var/run:size=1m,mode=1777
+      - /var/log/nginx:size=16m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Limites anti-DoS local
+    mem_limit: 128m
+    pids_limit: 128
+
+networks:
+  workshop:
+    driver: bridge

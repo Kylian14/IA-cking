@@ -1,0 +1,14 @@
+all:
+  children:
+    workshop:
+      hosts:
+        atelier:
+          # IP de l'hôte cible (pas celle du routeur). À adapter ; doit
+          # correspondre à nuc_lan_ip dans group_vars/workshop.yml.
+          ansible_host: 10.0.0.10
+          # User non-root sur l'hôte, doit avoir votre clé publique dans
+          # ~/.ssh/authorized_keys avant le premier run.
+          ansible_user: atelier
+      vars:
+        # Méta libre, utile pour identifier le déploiement.
+        site_name: iacking

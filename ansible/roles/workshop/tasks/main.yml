@@ -1,0 +1,204 @@
+---
+# ─────────────────────────────────────────────────────────────────
+# TLS : cert auto-signé pour chiffrer le trafic LAN
+# ─────────────────────────────────────────────────────────────────
+- name: Crée le répertoire {{ ssl_dir }}
+  ansible.builtin.file:
+    path: "{{ ssl_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Vérifie si le cert existe et n'expire pas dans les 30 jours
+  ansible.builtin.command:
+    cmd: openssl x509 -in {{ ssl_dir }}/server.crt -noout -checkend 2592000
+  register: ssl_check
+  failed_when: false
+  changed_when: false
+
+- name: Génère / renouvelle le cert auto-signé
+  ansible.builtin.command:
+    cmd: >
+      openssl req -x509 -newkey rsa:2048
+      -keyout {{ ssl_dir }}/server.key
+      -out    {{ ssl_dir }}/server.crt
+      -days {{ ssl_cert_days }}
+      -nodes
+      -subj "/CN={{ ssl_cn }}"
+      -addext "subjectAltName={{ ssl_san_list | join(',') }}"
+  when: ssl_check.rc != 0
+  notify: restart frontend
+
+# nginx tourne en uid 101 (non-root) dans le container et lit cert + clé via
+# le bind-mount : une clé en 0640 root:root serait illisible par uid 101 (ni
+# owner ni groupe) -> nginx ne démarrerait pas en TLS. Sur ce NUC dédié
+# (threat model = LAN sniff, cert auto-signé régénéré chaque année), 0644 est
+# le compromis qui marche. Pour durcir : chown la clé vers l'uid nginx (101).
+- name: Perms 0644 sur le cert + la clé (lisibles par le nginx non-root du container)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - "{{ ssl_dir }}/server.crt"
+    - "{{ ssl_dir }}/server.key"
+
+# ─────────────────────────────────────────────────────────────────
+# Clone du repo + perms data dir
+# ─────────────────────────────────────────────────────────────────
+- name: Clone / met à jour le repo de l'atelier
+  ansible.builtin.git:
+    repo: "{{ workshop_repo }}"
+    dest: "{{ workshop_dir }}"
+    version: "{{ workshop_branch }}"
+    update: true
+    force: false
+  become: false
+  become_user: "{{ workshop_user }}"
+
+- name: Le volume ./data doit appartenir à UID 10001 (user `app` du container backend)
+  ansible.builtin.file:
+    path: "{{ workshop_dir }}/data"
+    state: directory
+    owner: "10001"
+    group: "10001"
+    mode: "0775"
+
+# CHEATSHEET.md n'est pas versionné (solutions hors repo public). docker-compose
+# le bind-monte dans le backend : il doit exister, sinon Docker crée un dossier.
+# On l'initialise depuis l'exemple (force:false -> ne réécrase pas une version remplie).
+- name: Initialise CHEATSHEET.md depuis l'exemple si absent
+  ansible.builtin.copy:
+    src: "{{ workshop_dir }}/CHEATSHEET.example.md"
+    dest: "{{ workshop_dir }}/CHEATSHEET.md"
+    remote_src: true
+    force: false
+    owner: "{{ workshop_user }}"
+    group: "{{ workshop_user }}"
+    mode: "0644"
+  become: false
+  become_user: "{{ workshop_user }}"
+
+- name: Dossier credentials (kit local sur le NUC, 0700)
+  ansible.builtin.file:
+    path: "{{ credentials_dir }}"
+    state: directory
+    owner: "{{ workshop_user }}"
+    group: "{{ workshop_user }}"
+    mode: "0700"
+
+# ─────────────────────────────────────────────────────────────────
+# SESSION_SECRET : vault → fichier persisté → autogeneré
+# ─────────────────────────────────────────────────────────────────
+- name: Vérifie un éventuel SESSION_SECRET déjà persisté
+  ansible.builtin.stat:
+    path: "{{ credentials_dir }}/session_secret"
+  register: ss_file
+  become: false
+  become_user: "{{ workshop_user }}"
+
+- name: Génère un SESSION_SECRET si vault_session_secret est vide ET fichier absent
+  ansible.builtin.shell:
+    cmd: openssl rand -hex 32 > {{ credentials_dir }}/session_secret && chmod 600 {{ credentials_dir }}/session_secret
+  args:
+    creates: "{{ credentials_dir }}/session_secret"
+  when: (vault_session_secret | default('')) | length == 0
+  become: false
+  become_user: "{{ workshop_user }}"
+
+- name: Lit le SESSION_SECRET persisté si pas de vault
+  ansible.builtin.slurp:
+    src: "{{ credentials_dir }}/session_secret"
+  register: persisted_ss
+  when: (vault_session_secret | default('')) | length == 0
+  become: false
+  become_user: "{{ workshop_user }}"
+
+- name: Définit effective_session_secret pour le template .env
+  ansible.builtin.set_fact:
+    effective_session_secret: >-
+      {{ vault_session_secret
+         if (vault_session_secret | default('')) | length > 0
+         else (persisted_ss.content | b64decode | trim) }}
+
+# ─────────────────────────────────────────────────────────────────
+# .env + override compose + nginx LAN-HTTPS
+# ─────────────────────────────────────────────────────────────────
+- name: Génère .env (perms 0600)
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ workshop_dir }}/.env"
+    owner: "{{ workshop_user }}"
+    group: "{{ workshop_user }}"
+    mode: "0600"
+  no_log: true
+
+- name: Aide-mémoire credentials (fichier local NUC, 0600)
+  ansible.builtin.copy:
+    dest: "{{ credentials_dir }}/credentials.txt"
+    owner: "{{ workshop_user }}"
+    group: "{{ workshop_user }}"
+    mode: "0600"
+    content: |
+      # Identifiants atelier, générés par Ansible {{ ansible_date_time.iso8601 }}
+      ADMIN_PASSWORD={{ vault_admin_password }}
+      # SESSION_SECRET dans .env (jamais à partager humainement)
+  no_log: true
+
+- name: Crée le répertoire deploy/ (configs générées, hors arbre versionné)
+  ansible.builtin.file:
+    path: "{{ workshop_dir }}/deploy"
+    state: directory
+    owner: "{{ workshop_user }}"
+    group: "{{ workshop_user }}"
+    mode: "0755"
+
+- name: Génère la conf nginx HTTPS LAN (montée par l'override, pas d'écrasement du fichier versionné)
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: "{{ workshop_dir }}/deploy/nginx.lan-https.conf"
+    owner: "{{ workshop_user }}"
+    group: "{{ workshop_user }}"
+    mode: "0644"
+  notify: restart frontend
+
+- name: Pose docker-compose.override.yml (mount TLS + conf nginx HTTPS + healthcheck HTTPS)
+  ansible.builtin.template:
+    src: docker-compose.override.yml.j2
+    dest: "{{ workshop_dir }}/docker-compose.override.yml"
+    owner: "{{ workshop_user }}"
+    group: "{{ workshop_user }}"
+    mode: "0644"
+  notify: restart frontend
+
+# ─────────────────────────────────────────────────────────────────
+# docker compose build/up + smoke HTTPS
+# ─────────────────────────────────────────────────────────────────
+- name: Flush handlers (rebuild si nginx.conf a changé)
+  ansible.builtin.meta: flush_handlers
+
+- name: docker compose up -d (build au passage)
+  community.docker.docker_compose_v2:
+    project_src: "{{ workshop_dir }}"
+    state: present
+    build: policy   # build si manquant ou Dockerfile changé
+
+- name: Smoke - frontend HTTPS 200 sur port élève
+  ansible.builtin.uri:
+    url: "https://127.0.0.1:{{ student_port }}/"
+    status_code: 200
+    validate_certs: false
+  retries: 10
+  delay: 3
+  register: smoke_student
+  until: smoke_student.status == 200
+
+- name: Smoke - frontend HTTPS 200 sur port admin
+  ansible.builtin.uri:
+    url: "https://127.0.0.1:{{ admin_port }}/"
+    status_code: 200
+    validate_certs: false
+  retries: 10
+  delay: 3

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0b">
+<title>Classement : IA'cking</title>
+<link rel="stylesheet" href="/static/fonts.css">
+<link rel="stylesheet" href="/static/style.css?v=1779391662">
+</head>
+<body>
+
+<div id="ws-status" class="sb-disconnected">⚠ Déconnecté</div>
+
+<div class="sb-shell">
+  <header class="sb-header">
+    <div>
+      <div class="upper" style="margin-bottom: 10px;">IA'cking<span class="caret"></span></div>
+      <h1 class="sb-title">Classement<span class="dot-accent">.</span></h1>
+    </div>
+    <div class="sb-stats">
+      <div class="sb-stat">
+        <div class="sb-stat-num" id="stat-players">0</div>
+        <div class="sb-stat-label">participants</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="sb-header-row">
+    <div class="left">rang</div>
+    <div class="left">élève</div>
+    <div class="left">parcours</div>
+    <div>messages</div>
+    <div>tentat.</div>
+    <div>indices</div>
+    <div>score</div>
+  </div>
+
+  <ul id="sb-table" class="sb-table"></ul>
+
+  <div id="sb-empty" class="sb-empty">
+    <div class="upper">en attente · aucun élève connecté</div>
+    <p style="margin-top: 18px; font-family: var(--display); font-size: 32px; color: var(--text-dim);">
+      Le tableau s'allumera dès le premier token utilisé.
+    </p>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+let ws = null;
+let levelsTotal = 7;
+let regularLevels = [];
+let bonusLevels = [];
+let lastByToken = new Map();
+
+async function fetchScoreboard() {
+  try {
+    const res = await fetch('/admin/scoreboard', { credentials: 'same-origin' });
+    if (res.status === 401) {
+      location.href = '/';
+      return;
+    }
+    if (!res.ok) throw new Error(res.statusText);
+    const data = await res.json();
+    levelsTotal = data.levels_total;
+    regularLevels = data.regular_levels || [];
+    bonusLevels = data.bonus_levels || [];
+    render(data.scoreboard);
+  } catch (e) {
+    console.error('fetch scoreboard', e);
+  }
+}
+
+function render(rows) {
+  $('stat-players').textContent = String(rows.length).padStart(2, '0');
+
+  const table = $('sb-table');
+  const empty = $('sb-empty');
+  table.innerHTML = '';
+  if (rows.length === 0) {
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  for (const r of rows) {
+    const li = document.createElement('li');
+    li.className = `sb-row rank-${r.rank}`;
+    const flash = (lastByToken.get(r.token) ?? -1) < r.solved_count;
+    if (flash && lastByToken.has(r.token)) li.classList.add('flash');
+
+    li.innerHTML = `
+      <div class="sb-rank">${r.rank}</div>
+      <div>
+        <div class="sb-name">
+          ${escapeHtml(r.name)}
+          ${!r.revoked ? '<span class="sb-live">en jeu</span>' : ''}
+        </div>
+        <div class="sb-token">#${escapeHtml(r.token)}</div>
+      </div>
+      <div class="sb-progress">${cells(r)}</div>
+      <div class="sb-metric sb-metric-num">${r.total_messages ?? 0}</div>
+      <div class="sb-metric sb-metric-num">${r.total_attempts}</div>
+      <div class="sb-metric sb-metric-num">${r.total_hints}</div>
+      <div class="sb-score">${r.solved_count}<span class="denom">/${regularLevels.length}</span></div>
+    `;
+    table.appendChild(li);
+    lastByToken.set(r.token, r.solved_count);
+    if (flash) {
+      setTimeout(() => li.classList.remove('flash'), 1500);
+    }
+  }
+}
+
+function cells(r) {
+  const solvedSet = new Set(r.solved_levels);
+  const bonusSolvedSet = new Set((r.bonus && r.bonus.solved_levels) || []);
+  const allLevels = [...regularLevels, ...bonusLevels];
+  return allLevels.map((lvl, i) => {
+    const isBonus = bonusLevels.some(b => b.id === lvl.id);
+    const isSolved = isBonus ? bonusSolvedSet.has(lvl.id) : solvedSet.has(lvl.id);
+    const isCurrent = !isBonus && lvl.id === r.current_level;
+    let cls = 'sb-cell';
+    if (isBonus) cls += ' bonus';
+    if (isSolved) cls += ' solved';
+    else if (isCurrent) cls += ' current';
+    return `<div class="${cls}" title="Niveau ${lvl.id}">${String(lvl.id).padStart(2, '0')}</div>`;
+  }).join('');
+}
+
+function formatTime(sec) {
+  if (!sec) return '-';
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  if (m === 0) return `${s}s`;
+  return `${String(m).padStart(2, '0')}m${String(s).padStart(2, '0')}`;
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+// ============================================================
+//  WebSocket
+// ============================================================
+let wsRetries = 0;
+const ALLOWED_WS_EVENTS = new Set([
+  'solved', 'session_login', 'session_created', 'session_revoked',
+  'session_restored', 'sessions_cleaned', 'level_reset', 'attempt', 'ping',
+]);
+
+function openWs() {
+  if (ws) return;
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/admin/ws/monitor`);
+  ws.onopen = () => {
+    wsRetries = 0;
+    $('ws-status').classList.remove('show');
+  };
+  ws.onmessage = (ev) => {
+    try {
+      const msg = JSON.parse(ev.data);
+      if (typeof msg?.event !== 'string' || !ALLOWED_WS_EVENTS.has(msg.event)) return;
+      if (msg.event !== 'ping') fetchScoreboard();
+    } catch {}
+  };
+  ws.onclose = () => {
+    ws = null;
+    $('ws-status').classList.add('show');
+    const delay = Math.min(30000, 1000 * Math.pow(2, wsRetries++));
+    setTimeout(openWs, delay);
+  };
+  ws.onerror = () => { try { ws.close(); } catch {} };
+}
+
+// ============================================================
+//  GO
+// ============================================================
+fetchScoreboard();
+openWs();
+setInterval(fetchScoreboard, 15000);
+</script>
+</body>
+</html>

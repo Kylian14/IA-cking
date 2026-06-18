@@ -1,0 +1,46 @@
+---
+# Ce rôle n'est exécuté que si `enable_firewall: true`.
+# Cf. group_vars/workshop.yml.
+
+- name: sysctl - ip_forward=1 (Docker) + ipv6 forwarding off
+  ansible.builtin.copy:
+    src: 99-no-forward.conf
+    dest: /etc/sysctl.d/99-no-forward.conf
+    owner: root
+    group: root
+    mode: "0644"
+  register: sysctl_file
+
+- name: Appliquer sysctl
+  ansible.builtin.command: sysctl --system
+  when: sysctl_file.changed
+  changed_when: true
+
+- name: Génère /etc/nftables.conf depuis le template
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: /etc/nftables.conf
+    owner: root
+    group: root
+    mode: "0755"
+  notify: reload nftables
+
+- name: Valide la syntaxe (nft -c -f)
+  ansible.builtin.command: nft -c -f /etc/nftables.conf
+  changed_when: false
+
+- name: nftables actif au démarrage
+  ansible.builtin.systemd:
+    name: nftables
+    state: started
+    enabled: true
+
+- name: Force le flush du handler (charge le ruleset maintenant)
+  ansible.builtin.meta: flush_handlers
+
+# Quand on flush + recharge un ruleset, Docker peut perdre ses chaines NAT.
+# Le restart de Docker les réinjecte.
+- name: Restart Docker pour réinjecter ses chaines DOCKER
+  ansible.builtin.systemd:
+    name: docker
+    state: restarted

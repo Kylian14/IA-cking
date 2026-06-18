@@ -1,0 +1,51 @@
+---
+# Déploiement de l'atelier sur un hôte dédié, entrypoint Ansible.
+# Cf. ../INSTALL.md (section "Déploiement LAN/serveur") pour le contexte.
+
+- name: Déploiement complet de l'hôte atelier
+  hosts: workshop
+  gather_facts: true
+
+  pre_tasks:
+    - name: Vérifie une distribution compatible (famille Debian, gestionnaire apt)
+      ansible.builtin.assert:
+        that:
+          - ansible_os_family == "Debian"
+        fail_msg: >
+          Ce playbook installe Docker via apt (paquet docker.io) : il cible la
+          famille Debian (Debian, Ubuntu et dérivés). Testé sur Ubuntu Server
+          24.04+ (dont 26.04) et Debian 12. Pour une distribution non-apt
+          (RHEL/Fedora, Alpine, Arch...), adapter les rôles `common` et `docker`.
+
+    - name: Affiche le contexte de run
+      ansible.builtin.debug:
+        msg:
+          - "Host        : {{ inventory_hostname }} ({{ ansible_host }})"
+          - "User        : {{ ansible_user }}"
+          - "Firewall    : {{ enable_firewall | bool }}"
+          - "Workshop dir: {{ workshop_dir }}"
+
+  roles:
+    - role: common
+      tags: [common, base]
+    - role: ssh
+      tags: [ssh, security]
+    - role: fail2ban
+      tags: [fail2ban, security]
+    - role: docker
+      tags: [docker]
+    - role: firewall
+      tags: [firewall, security]
+      when: enable_firewall | default(false) | bool
+    - role: workshop
+      tags: [workshop, app]
+
+  post_tasks:
+    - name: Récapitulatif
+      ansible.builtin.debug:
+        msg:
+          - "Atelier élève      : https://{{ nuc_lan_ip }}/  (port {{ student_host_port }} = 443, cert auto-signé)"
+          - "Admin               : https://{{ nuc_lan_ip }}:{{ admin_port }}/  (HTTPS, cert auto-signé)"
+          - "Credentials sur le NUC : {{ credentials_dir }}/credentials.txt"
+          - "TLS cert            : {{ ssl_dir }}/server.crt (validité {{ ssl_cert_days }}j)"
+          - "Firewall actif      : {{ enable_firewall | bool }}"

@@ -1,0 +1,43 @@
+#!/usr/sbin/nft -f
+# Firewall de l'atelier. Généré par Ansible, ne pas éditer à la main, modifier
+# le template dans roles/firewall/templates/nftables.conf.j2.
+#
+# IMPORTANT : on ne flush PAS le ruleset complet (Docker possède ses propres
+# tables ip filter / ip nat). On supprime + recrée uniquement notre table
+# inet filter, donc Docker reste fonctionnel.
+
+table inet filter
+delete table inet filter
+
+table inet filter {
+  chain input {
+    type filter hook input priority 0; policy drop;
+
+    iif "lo" accept
+    ct state established,related accept
+    ct state invalid drop
+
+    icmp type echo-request limit rate 5/second accept
+
+    # SSH : ouvert (auth par clé publique uniquement côté sshd, fail2ban actif)
+    tcp dport 22 accept
+  }
+
+  # Docker DNAT court-circuite INPUT pour les ports forwardés vers les
+  # containers (atelier sur ports host {{ student_host_port }}/{{ admin_port }}).
+  # On bloque uniquement le forwarding LAN -> WAN ; le port admin reste
+  # accessible à tout le LAN (la protection vient du mot de passe + rate
+  # limit côté backend).
+  chain forward {
+    type filter hook forward priority 0; policy accept;
+
+    # Aucun forwarding LAN <-> WAN. Les containers Docker ont leur NAT
+    # indépendant via ip nat (table gérée par Docker).
+    iifname "{{ lan_iface }}" oifname "{{ wan_iface }}" drop
+    iifname "{{ wan_iface }}" oifname "{{ lan_iface }}" drop
+  }
+
+  chain output {
+    type filter hook output priority 0; policy accept;
+  }
+}

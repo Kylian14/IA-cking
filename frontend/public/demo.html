@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0b">
+<title>Démo : IA'cking</title>
+<link rel="stylesheet" href="/static/fonts.css">
+<link rel="stylesheet" href="/static/style.css?v=1779215707">
+</head>
+<body>
+
+<!-- ============== LEVELS ============== -->
+<div id="page-levels">
+  <div class="header">
+    <div>
+      <span class="brand">IA<em>'cking</em></span>
+      <span class="brand-sub">Mode démonstration</span>
+    </div>
+    <a href="/" class="btn-ghost">← Retour login</a>
+  </div>
+
+  <section class="section">
+    <div class="section-head">
+      <div style="max-width: 720px;">
+        <div class="upper section-kicker">mode démonstration · session publique</div>
+        <h1>Le bac à sable, <em>libre d'accès</em>.</h1>
+        <p class="section-sub">
+          Tous les niveaux sont déverrouillés. La session est partagée et persistante &mdash;
+          réinitialisable depuis l'admin.
+        </p>
+      </div>
+    </div>
+    <div id="levels-grid" class="levels-grid"></div>
+  </section>
+</div>
+
+<!-- ============== CHAT ============== -->
+<div id="page-chat" class="hidden">
+  <div class="header">
+    <div>
+      <span class="brand">IA<em>'cking</em></span>
+      <span class="brand-sub">Mode démonstration</span>
+    </div>
+    <a href="/" class="btn-ghost">← Retour login</a>
+  </div>
+
+  <div class="chat-shell">
+    <header class="chat-sticky-top">
+      <button id="back-btn" class="btn btn-ghost btn-sm chat-back">← Niveaux</button>
+      <div class="chat-sticky-info">
+        <span class="num-dec">démo · épreuve <span id="chat-num"></span></span>
+        <h2 class="chat-title" id="chat-name"></h2>
+      </div>
+      <div class="chat-actions">
+        <span id="msg-counter" class="upper">0 msg</span>
+        <button id="model-toggle" class="btn btn-sm">Modèle</button>
+        <span id="model-badge" class="hidden" style="font-family: var(--mono); font-size: 11px; color: var(--accent); align-self: center;"></span>
+        <button id="hint-toggle" class="btn btn-sm">Indice</button>
+      </div>
+    </header>
+    <p class="chat-desc" id="chat-desc"></p>
+
+    <div id="chat-window" class="chat-window"></div>
+
+    <div class="chat-input-wrap">
+      <button id="scroll-bottom-btn" class="scroll-bottom-btn hidden" aria-label="Aller en bas" title="Aller en bas de la conversation">↓</button>
+      <label for="chat-input">Ton message au modèle</label>
+      <div class="chat-input">
+        <textarea id="chat-input" placeholder="Écris ton attaque… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne)" maxlength="2000"></textarea>
+        <button id="send-btn" class="btn btn-pri">Envoyer</button>
+      </div>
+      <div class="chat-foot">
+        <span id="char-counter">0 / 2000</span>
+        <span>démo · faire fuiter le secret au modèle</span>
+      </div>
+    </div>
+
+    <div class="verify-box" title="Valide ici le secret extrait, forme MOT-XXXX">
+      <div class="verify-head"><div class="upper">secret →</div></div>
+      <input id="verify-input" type="text" placeholder="MOT-XXXX" autocomplete="off">
+      <button id="verify-btn" class="btn btn-pri">Valider</button>
+      <div id="verify-result" class="verify-result"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============== SUCCESS OVERLAY ============== -->
+<div id="success-overlay" class="success-overlay hidden">
+  <div class="success-banner">
+    <h1>Niveau résolu.</h1>
+    <p id="success-msg">Le secret est tombé. Retour aux niveaux dans 3s.</p>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const show = (id) => $(id).classList.remove('hidden');
+const hide = (id) => $(id).classList.add('hidden');
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+  });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail || detail; } catch {}
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
+function escape(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+const STORAGE_MODEL_REVEAL_DEMO = 'workshop_demo_model_reveal';
+
+let currentLevelId = null;
+let currentLevels = [];
+
+async function loadLevels() {
+  try {
+    const r = await api('/api/demo/levels');
+    currentLevels = r.levels;
+    renderLevels();
+  } catch (e) {
+    // Pas de cookie admin valide → on dégage vers le login élève.
+    if (/401|403|admin/i.test(e.message)) location.href = '/';
+    else throw e;
+  }
+}
+
+function renderLevels() {
+  const grid = $('levels-grid');
+  grid.innerHTML = '';
+  let idx = 0;
+  for (const lvl of currentLevels) {
+    const card = document.createElement('div');
+    let cls = 'level-card lift';
+    let status = lvl.solved ? 'résolu' : 'ouvert';
+    let pillCls = lvl.solved ? 'solved' : 'open';
+    if (lvl.solved) cls += ' solved';
+    card.className = cls;
+    card.style.setProperty('--i', idx++);
+    card.innerHTML = `
+      <div class="level-card-head">
+        <div class="num-dec">${String(lvl.id).padStart(2, '0')} / ${String(currentLevels.length).padStart(2, '0')}</div>
+        <span class="pill ${pillCls}">${status}</span>
+      </div>
+      <div class="level-card-body">
+        <h3 class="level-name">${escape(lvl.name)}</h3>
+        <p class="level-desc">${escape(lvl.description)}</p>
+      </div>
+      <div class="level-card-foot">
+        <div class="level-tags">épreuve ${String(lvl.id).padStart(2, '0')}</div>
+        <div class="level-time">${lvl.solved ? '✓' : '-'}</div>
+      </div>
+    `;
+    card.addEventListener('click', () => openLevel(lvl.id));
+    grid.appendChild(card);
+  }
+}
+
+async function openLevel(id) {
+  currentLevelId = id;
+  const lvl = currentLevels.find(l => l.id === id);
+  hide('page-levels');
+  show('page-chat');
+  $('chat-num').textContent = String(id).padStart(2, '0');
+  $('chat-name').textContent = lvl.name;
+  $('chat-desc').textContent = lvl.description || '';
+  $('chat-window').innerHTML = '';
+  $('verify-input').value = '';
+  $('verify-result').textContent = '';
+  $('verify-result').className = 'verify-result';
+  $('chat-input').value = '';
+  updateCharCounter();
+
+  $('model-badge').textContent = '';
+  $('model-badge').classList.add('hidden');
+  $('model-toggle').textContent = 'Afficher le modèle';
+  $('hint-toggle').disabled = false;
+  $('hint-toggle').textContent = "Voir l'indice";
+
+  await loadMessages();
+  if (localStorage.getItem(STORAGE_MODEL_REVEAL_DEMO) === '1') {
+    await revealModel();
+  }
+  $('chat-input').focus();
+}
+
+async function loadMessages() {
+  const r = await api(`/api/demo/levels/${currentLevelId}/messages`);
+  $('chat-window').innerHTML = '';
+  for (const m of r.messages) appendBubble(m.role, m.content);
+  updateMsgCounter(r.messages);
+  scrollChatToBottom();
+}
+
+function appendBubble(role, content) {
+  if (role === 'hint') {
+    const div = document.createElement('div');
+    div.className = 'bubble bubble-hint';
+    div.textContent = content;
+    $('chat-window').appendChild(div);
+    scrollChatToBottom();
+    return div;
+  }
+  const row = document.createElement('div');
+  row.className = `bubble-row ${role}`;
+  const label = document.createElement('div');
+  label.className = 'bubble-label';
+  label.textContent = role === 'user' ? '→ toi' : '← assistant';
+  const bubble = document.createElement('div');
+  bubble.className = `bubble bubble-${role}`;
+  if (role === 'assistant' && content.includes('\n') && /^[A-Za-z_-]+:/m.test(content)) {
+    bubble.classList.add('mono-content');
+  }
+  bubble.textContent = content;
+  row.appendChild(label);
+  row.appendChild(bubble);
+  $('chat-window').appendChild(row);
+  scrollChatToBottom();
+}
+
+function updateMsgCounter(messages) {
+  const n = messages.filter(m => m.role === 'user' || m.role === 'assistant').length;
+  $('msg-counter').textContent = `${n} message${n > 1 ? 's' : ''}`;
+}
+
+function scrollChatToBottom() {
+  const w = $('chat-window');
+  w.scrollTop = w.scrollHeight;
+  updateScrollBtn();
+}
+
+function isChatAtBottom() {
+  const w = $('chat-window');
+  return w.scrollHeight - w.scrollTop - w.clientHeight < 80;
+}
+
+function updateScrollBtn() {
+  const btn = $('scroll-bottom-btn');
+  if (!btn) return;
+  btn.classList.toggle('hidden', isChatAtBottom() || !$('chat-window').children.length);
+}
+
+$('chat-window').addEventListener('scroll', updateScrollBtn, { passive: true });
+$('scroll-bottom-btn').addEventListener('click', () => {
+  const w = $('chat-window');
+  w.scrollTo({ top: w.scrollHeight, behavior: 'smooth' });
+});
+
+$('back-btn').addEventListener('click', async () => {
+  hide('page-chat');
+  show('page-levels');
+  await loadLevels();
+});
+
+$('chat-input').addEventListener('input', updateCharCounter);
+$('chat-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+$('send-btn').addEventListener('click', sendMessage);
+
+function updateCharCounter() {
+  $('char-counter').textContent = `${$('chat-input').value.length} / 2000`;
+}
+
+let sending = false;
+async function sendMessage() {
+  if (sending) return;
+  const text = $('chat-input').value.trim();
+  if (!text) return;
+  sending = true;
+  $('send-btn').disabled = true;
+  appendBubble('user', text);
+  $('chat-input').value = '';
+  updateCharCounter();
+  const thinking = document.createElement('div');
+  thinking.className = 'thinking';
+  thinking.textContent = 'Le modèle réfléchit';
+  $('chat-window').appendChild(thinking);
+  scrollChatToBottom();
+  try {
+    const r = await api(`/api/demo/levels/${currentLevelId}/chat`, {
+      method: 'POST',
+      body: JSON.stringify({ message: text }),
+    });
+    thinking.remove();
+    appendBubble('assistant', r.reply);
+  } catch (e) {
+    thinking.remove();
+    appendBubble('assistant', '[ERREUR] ' + e.message);
+  } finally {
+    sending = false;
+    $('send-btn').disabled = false;
+    $('chat-input').focus();
+    const r = await api(`/api/demo/levels/${currentLevelId}/messages`);
+    updateMsgCounter(r.messages);
+  }
+}
+
+$('verify-input').addEventListener('input', (e) => {
+  e.target.value = e.target.value.toUpperCase();
+});
+$('verify-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') verifySecret();
+});
+$('verify-btn').addEventListener('click', verifySecret);
+
+async function verifySecret() {
+  const guess = $('verify-input').value.trim();
+  if (!guess) return;
+  $('verify-result').textContent = '';
+  $('verify-result').className = 'verify-result';
+  try {
+    const r = await api(`/api/demo/levels/${currentLevelId}/verify`, {
+      method: 'POST',
+      body: JSON.stringify({ guess }),
+    });
+    if (r.correct) {
+      showSuccess();
+    } else {
+      const el = $('verify-result');
+      el.textContent = 'Pas tout à fait. Continue à explorer.';
+      el.className = 'verify-result ko';
+    }
+  } catch (e) {
+    const el = $('verify-result');
+    el.textContent = e.message;
+    el.className = 'verify-result ko';
+  }
+}
+
+function showSuccess() {
+  show('success-overlay');
+  setTimeout(async () => {
+    hide('success-overlay');
+    hide('page-chat');
+    show('page-levels');
+    await loadLevels();
+  }, 3000);
+}
+
+$('hint-toggle').addEventListener('click', async () => {
+  try {
+    const r = await api(`/api/demo/levels/${currentLevelId}/hint`);
+    appendBubble('hint', r.hint);
+    $('hint-toggle').disabled = true;
+    $('hint-toggle').textContent = 'Indice affiché';
+  } catch (e) { alert(e.message); }
+});
+
+$('model-toggle').addEventListener('click', async () => {
+  if ($('model-badge').classList.contains('hidden')) {
+    await revealModel();
+    localStorage.setItem(STORAGE_MODEL_REVEAL_DEMO, '1');
+  } else {
+    $('model-badge').classList.add('hidden');
+    $('model-toggle').textContent = 'Afficher le modèle';
+    localStorage.setItem(STORAGE_MODEL_REVEAL_DEMO, '0');
+  }
+});
+
+async function revealModel() {
+  const r = await api(`/api/demo/levels/${currentLevelId}/model`);
+  $('model-badge').textContent = r.model;
+  $('model-badge').classList.remove('hidden');
+  $('model-toggle').textContent = 'Cacher le modèle';
+}
+
+loadLevels();
+</script>
+</body>
+</html>

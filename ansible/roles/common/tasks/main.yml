@@ -1,0 +1,43 @@
+---
+- name: apt update
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Installer paquets de base
+  ansible.builtin.apt:
+    name:
+      - ufw
+      - fail2ban
+      - unattended-upgrades
+      - nftables
+      - jq
+      - tmux
+      - htop
+      - ca-certificates
+      - git
+      - dnsmasq          # installé mais désactivé : pas de DNS interne dans ce déploiement
+    state: present
+    install_recommends: false
+
+- name: Désactive les services qu'on ne veut pas voir tourner
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop:
+    - cups
+    - cups-browsed
+    - avahi-daemon
+    - dnsmasq
+  failed_when: false   # certains peuvent ne pas être installés du tout
+
+- name: Active les auto-updates de sécurité
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    mode: "0644"
+    owner: root
+    group: root
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";

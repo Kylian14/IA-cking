@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+# Override compose pour le déploiement HTTPS :
+#   - mount du cert TLS + de la conf nginx HTTPS (sans toucher au fichier versionné)
+#   - port host {{ student_host_port }} (443) -> container {{ student_port }} : géré par
+#     STUDENT_HOST_PORT dans .env, interpolé par docker-compose.yml
+#   - healthcheck HTTPS interne
+services:
+  frontend:
+    volumes:
+      - {{ ssl_dir }}:/etc/nginx/ssl:ro
+      - {{ workshop_dir }}/deploy/nginx.lan-https.conf:/etc/nginx/nginx.conf:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--no-check-certificate", "-O", "/dev/null", "https://127.0.0.1:{{ student_port }}/"]
+      interval: 15s
+      timeout: 3s
+      start_period: 5s
+      retries: 3

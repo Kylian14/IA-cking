@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0b">
+<title>Admin : IA'cking</title>
+<link rel="stylesheet" href="/static/fonts.css">
+<link rel="stylesheet" href="/static/style.css?v=1779215707">
+</head>
+<body>
+
+<!-- ============== LOGIN ============== -->
+<div id="page-login" class="login-wrap">
+  <div class="login-poster">
+    <div class="upper">IA'cking · dashboard</div>
+    <div>
+      <h1 class="login-poster-title">
+        Tableau<br>
+        <em>de bord.</em>
+      </h1>
+      <p class="login-poster-sub">
+        Surveille les sessions en temps réel, envoie des indices ciblés, projette
+        le classement. La salle, en direct.
+      </p>
+    </div>
+  </div>
+
+  <div class="login-form-panel">
+    <div class="login-form">
+      <div class="upper" style="margin-bottom: 24px;">$ accès encadrant<span class="caret"></span></div>
+      <h2 class="login-title">Mot de passe.</h2>
+      <p class="login-sub">Connexion réservée à l'animation de l'atelier.</p>
+
+      <div class="field">
+        <label for="login-pwd">Mot de passe</label>
+        <input id="login-pwd" type="password" autocomplete="current-password"
+               style="font-family: var(--mono); font-size: 22px; letter-spacing: 0.2em;">
+      </div>
+
+      <div id="login-error" class="error hidden"></div>
+
+      <div class="login-actions">
+        <button id="login-submit" class="btn btn-pri">Ouvrir le dashboard →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============== DASHBOARD ============== -->
+<div id="page-dash" class="hidden">
+  <div class="header">
+    <div>
+      <span class="brand">IA<em>'cking</em></span>
+      <span class="brand-sub"><span class="dot"></span><span id="ws-status">connexion…</span></span>
+    </div>
+    <div class="row">
+      <a href="/scoreboard" target="_blank" rel="noopener noreferrer" class="btn btn-sm" style="text-decoration: none;">↗ Classement</a>
+      <button id="cheatsheet-btn" class="btn btn-sm">Cheatsheet</button>
+      <button id="export-btn" class="btn btn-sm">Export CSV</button>
+      <button id="logout-btn" class="btn btn-ghost">Déconnexion</button>
+    </div>
+  </div>
+
+  <div class="admin-shell">
+    <header class="admin-header">
+      <div>
+        <h2>Salle, <em style="color: var(--accent); ">en direct</em>.</h2>
+      </div>
+      <div class="admin-header-actions">
+        <button id="new-token-btn" class="btn btn-pri">+ Nouveau token</button>
+      </div>
+    </header>
+
+    <div class="admin-grid">
+
+      <!-- ========== Colonne A : Sessions ========== -->
+      <div class="admin-col">
+        <h2>Sessions</h2>
+
+        <div class="tabbar">
+          <button id="tab-students" class="tab active">Élèves</button>
+          <button id="tab-demo" class="tab">Démo</button>
+        </div>
+
+        <div id="tab-content-students">
+          <h3>Actifs</h3>
+          <ul id="sessions-active" class="session-list"></ul>
+          <h3>Révoqués</h3>
+          <ul id="sessions-revoked" class="session-list"></ul>
+          <button id="clean-revoked-btn" class="btn btn-sm btn-danger" style="margin-top: 12px;" disabled>Nettoyer les révoqués</button>
+        </div>
+
+        <div id="tab-content-demo" class="hidden">
+          <ul id="sessions-demo" class="session-list"></ul>
+          <button id="reset-demo-btn" class="btn btn-sm btn-danger" style="margin-top: 12px;">Réinitialiser la démo</button>
+        </div>
+      </div>
+
+      <!-- ========== Colonne B : Conversation ========== -->
+      <div class="admin-col">
+        <h2>Conversation</h2>
+        <div id="conv-empty" class="muted" style="padding: 32px 12px; text-align: center; font-family: var(--display); font-size: 18px;">
+          Sélectionne une session à gauche pour voir sa conversation.
+        </div>
+        <div id="conv-view" class="hidden" style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
+          <div class="admin-conv-header">
+            <div class="admin-conv-info">
+              <button id="conv-back" class="btn btn-sm btn-ghost admin-back-btn" type="button" title="Retour à la liste des sessions">← Sessions</button>
+              <div class="upper" id="conv-meta"></div>
+              <div class="admin-conv-title" id="conv-title"></div>
+            </div>
+            <div style="text-align: right;">
+              <div class="upper">secret</div>
+              <div class="admin-conv-secret" id="conv-secret"></div>
+              <button id="conv-reset" class="btn btn-sm btn-danger" style="margin-top: 8px;" title="Régénère un nouveau secret et efface l'historique de ce niveau">Réinitialiser le niveau</button>
+            </div>
+          </div>
+          <div id="conv-tabs" class="admin-level-tabs"></div>
+          <div id="conv-body" class="admin-conv-body"></div>
+          <div class="admin-conv-foot">
+            <label for="hint-input">Envoyer un indice à cet élève</label>
+            <div class="input-row">
+              <input id="hint-input" type="text" placeholder="Pense au format YAML…" maxlength="500">
+              <button id="hint-send" class="btn btn-pri">Envoyer</button>
+            </div>
+            <div class="upper" style="margin-top: 8px;">L'indice est visible par l'élève uniquement, pas par le modèle.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ============== POPUP TOKEN ============== -->
+<div id="token-popup" class="token-popup hidden">
+  <div class="token-popup-card">
+    <h3>Nouveau token</h3>
+    <div id="token-popup-value" class="token-popup-value"></div>
+    <div class="token-popup-actions">
+      <button id="token-copy" class="btn-primary">Copier</button>
+      <button id="token-close">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============== CHEATSHEET MODAL ============== -->
+<div id="cheatsheet-modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 class="modal-title">cheatsheet.md</h3>
+      <div class="row">
+        <button id="cheatsheet-raw" class="btn-sm btn-ghost">Voir brut</button>
+        <button id="cheatsheet-close" class="btn-sm">Fermer</button>
+      </div>
+    </div>
+    <div id="cheatsheet-body" class="modal-body"></div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const show = (id) => $(id).classList.remove('hidden');
+const hide = (id) => $(id).classList.add('hidden');
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+  });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail || detail; } catch {}
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
+function escape(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// Bascule mobile : sur petit écran, on affiche soit la liste de sessions,
+// soit la conversation (jamais les deux empilées). Sur PC, sans effet.
+function showConvMobile()   { document.querySelector('.admin-grid')?.classList.add('conv-active'); }
+function hideConvMobile()   { document.querySelector('.admin-grid')?.classList.remove('conv-active'); }
+
+// ============================================================
+//  STATE
+// ============================================================
+let LEVELS = [];                 // méta des niveaux
+let students = [];               // sessions élèves
+let demoSessions = [];           // session démo
+let selectedToken = null;
+let selectedLevel = null;
+let currentTab = 'students';
+let ws = null;
+let unreadByToken = new Set();   // tokens avec nouveaux messages non vus
+let helpByToken = new Map();     // token → niveau pour lequel l'élève a demandé de l'aide (transient)
+
+// ============================================================
+//  LOGIN
+// ============================================================
+async function tryAdmin() {
+  try {
+    await api('/admin/me');
+    await enterDash();
+  } catch {
+    show('page-login');
+    $('login-pwd').focus();
+  }
+}
+
+$('login-submit').addEventListener('click', adminLogin);
+$('login-pwd').addEventListener('keydown', (e) => { if (e.key === 'Enter') adminLogin(); });
+
+async function adminLogin() {
+  const pwd = $('login-pwd').value;
+  $('login-error').classList.add('hidden');
+  try {
+    await api('/admin/login', { method: 'POST', body: JSON.stringify({ password: pwd }) });
+    await enterDash();
+  } catch (e) {
+    $('login-error').textContent = e.message;
+    $('login-error').classList.remove('hidden');
+  }
+}
+
+async function enterDash() {
+  hide('page-login');
+  show('page-dash');
+  const lvls = await api('/admin/levels');
+  LEVELS = lvls.levels;
+  renderModelsList();
+  await refreshSessions();
+  openWebSocket();
+}
+
+$('logout-btn').addEventListener('click', async () => {
+  await api('/admin/logout', { method: 'POST' });
+  if (ws) ws.close();
+  location.reload();
+});
+
+// ============================================================
+//  TABS
+// ============================================================
+$('tab-students').addEventListener('click', () => switchTab('students'));
+$('tab-demo').addEventListener('click', () => switchTab('demo'));
+
+function switchTab(tab) {
+  currentTab = tab;
+  $('tab-students').classList.toggle('active', tab === 'students');
+  $('tab-demo').classList.toggle('active', tab === 'demo');
+  $('tab-content-students').classList.toggle('hidden', tab !== 'students');
+  $('tab-content-demo').classList.toggle('hidden', tab !== 'demo');
+}
+
+// ============================================================
+//  SESSIONS
+// ============================================================
+async function refreshSessions() {
+  const r = await api('/admin/sessions');
+  students = r.students;
+  demoSessions = r.demo;
+  // Purge des demandes d'aide pour des sessions disparues / révoquées.
+  const liveTokens = new Set();
+  for (const s of [...students, ...demoSessions]) {
+    if (!s.revoked) liveTokens.add(s.token);
+  }
+  for (const k of [...helpByToken.keys()]) {
+    if (!liveTokens.has(k)) helpByToken.delete(k);
+  }
+  renderSessionLists();
+  renderProgressTable();
+  // Si la sélection n'existe plus, on la nettoie
+  if (selectedToken && ![...students, ...demoSessions].some(s => s.token === selectedToken)) {
+    selectedToken = null;
+    selectedLevel = null;
+    hide('conv-view');
+    show('conv-empty');
+    hideConvMobile();
+  } else if (selectedToken) {
+    await loadConversation();
+  }
+}
+
+function renderSessionLists() {
+  const active = $('sessions-active');
+  const revoked = $('sessions-revoked');
+  active.innerHTML = ''; revoked.innerHTML = '';
+  let revokedCount = 0;
+  for (const s of students) {
+    const li = sessionListItem(s);
+    if (s.revoked) { revoked.appendChild(li); revokedCount++; }
+    else active.appendChild(li);
+  }
+  if (!active.children.length) active.innerHTML = '<li class="muted tiny">Aucune session active.</li>';
+  if (!revoked.children.length) revoked.innerHTML = '<li class="muted tiny">-</li>';
+
+  const cleanBtn = $('clean-revoked-btn');
+  if (cleanBtn) {
+    cleanBtn.disabled = revokedCount === 0;
+    cleanBtn.textContent = revokedCount > 0
+      ? `Nettoyer les révoqués (${revokedCount})`
+      : 'Nettoyer les révoqués';
+  }
+
+  const demo = $('sessions-demo');
+  demo.innerHTML = '';
+  for (const s of demoSessions) demo.appendChild(sessionListItem(s));
+}
+
+// Rang dans la file d'aide (insertion-order du Map, en ignorant la session sélectionnée).
+function helpRank(token) {
+  if (token === selectedToken) return null;
+  let r = 0;
+  for (const k of helpByToken.keys()) {
+    if (k === selectedToken) continue;          // la sélection consomme la demande
+    r++;
+    if (k === token) return r;
+  }
+  return null;
+}
+
+function sessionListItem(s) {
+  const li = document.createElement('li');
+  let cls = 'session-item';
+  if (s.revoked) cls += ' revoked';
+  if (s.is_demo) cls += ' demo';
+  if (s.token === selectedToken) cls += ' selected';
+  const helpLevel = helpByToken.get(s.token);
+  const rank = helpRank(s.token);
+  if (helpLevel != null && s.token !== selectedToken) {
+    cls += ' help-pending';
+    if (rank === 1) cls += ' help-first';
+  }
+  li.className = cls;
+  const solvedCount = (s.progress || []).filter(p => p.solved).length;
+  const totalLevels = LEVELS.length;
+  const newBadge = unreadByToken.has(s.token) && s.token !== selectedToken
+    ? '<span class="session-badge new">new</span>' : '';
+  const helpBadge = (helpLevel != null && s.token !== selectedToken)
+    ? `<span class="session-badge help" title="Niveau ${helpLevel} · ${rank === 1 ? 'prochain' : rank + 'ᵉ dans la file'}">✋ aide #${rank}</span>` : '';
+  const name = s.name || (s.is_demo ? 'Session démo' : '(sans prénom)');
+  li.innerHTML = `
+    <div class="session-token">
+      <span>#${escape(s.token)}${newBadge}${helpBadge}</span>
+      <span class="meta-progress">${solvedCount}/${totalLevels}</span>
+    </div>
+    <div class="session-name">${escape(name)}</div>
+  `;
+  li.addEventListener('click', () => selectSession(s.token));
+  if (!s.revoked && !s.is_demo) {
+    const btn = document.createElement('button');
+    btn.className = 'btn-sm btn-danger';
+    btn.textContent = 'Révoquer';
+    btn.style.marginTop = '6px';
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!confirm(`Révoquer le token ${s.token} ?`)) return;
+      try {
+        await api(`/admin/tokens/${s.token}`, { method: 'DELETE' });
+        await refreshSessions();
+      } catch (e) { alert(e.message); }
+    });
+    li.appendChild(btn);
+  } else if (s.revoked && !s.is_demo) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; gap:6px; margin-top:6px;';
+    const restore = document.createElement('button');
+    restore.className = 'btn-sm';
+    restore.textContent = 'Restaurer';
+    restore.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        await api(`/admin/tokens/${s.token}/restore`, { method: 'POST' });
+        await refreshSessions();
+      } catch (e) { alert(e.message); }
+    });
+    const del = document.createElement('button');
+    del.className = 'btn-sm btn-danger';
+    del.textContent = 'Supprimer';
+    del.title = 'Suppression définitive (session + messages + tentatives)';
+    del.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!confirm(`Supprimer DÉFINITIVEMENT le token ${s.token} et tout son historique ?\n\nIrréversible. L'élève disparaîtra du scoreboard.`)) return;
+      try {
+        await api(`/admin/sessions/${s.token}`, { method: 'DELETE' });
+        if (selectedToken === s.token) {
+          selectedToken = null; selectedLevel = null;
+          hide('conv-view'); show('conv-empty'); hideConvMobile();
+        }
+        await refreshSessions();
+      } catch (e) { alert(e.message); }
+    });
+    row.appendChild(restore); row.appendChild(del);
+    li.appendChild(row);
+  }
+  return li;
+}
+
+async function selectSession(token) {
+  selectedToken = token;
+  unreadByToken.delete(token);
+  // Si la session avait une demande d'aide en cours, on l'acquitte côté
+  // serveur (re-arme le bouton ✋ Aide de l'élève + resync autres admins).
+  const hadHelp = helpByToken.has(token);
+  helpByToken.delete(token);
+  if (hadHelp) {
+    api(`/admin/help/${encodeURIComponent(token)}/acquit`, { method: 'POST' })
+      .catch(() => { /* best-effort */ });
+  }
+  // Sélectionne automatiquement le niveau actuel ou le premier débloqué
+  const sess = [...students, ...demoSessions].find(s => s.token === token);
+  if (sess) {
+    const progress = sess.progress || [];
+    let target = 1;
+    if (sess.is_demo) {
+      target = selectedLevel || 1;
+    } else {
+      const firstUnsolved = LEVELS.find(l => {
+        const p = progress.find(p => p.level_id === l.id);
+        return !p || !p.solved;
+      });
+      target = firstUnsolved ? firstUnsolved.id : LEVELS.length;
+    }
+    selectedLevel = target;
+  }
+  renderSessionLists();
+  await loadConversation();
+}
+
+// ============================================================
+//  CONVERSATION
+// ============================================================
+async function loadConversation() {
+  if (!selectedToken || !selectedLevel) return;
+  hide('conv-empty');
+  show('conv-view');
+  showConvMobile();    // sur mobile : on bascule sur la conv
+  const sess = [...students, ...demoSessions].find(s => s.token === selectedToken);
+  const progress = sess?.progress || [];
+  const lvl = LEVELS.find(l => l.id === selectedLevel);
+
+  $('conv-title').textContent = `${sess?.name || sess?.token || ''} : ${String(selectedLevel).padStart(2,'0')}. ${lvl?.name || ''}`;
+  $('conv-meta').textContent = `Token ${selectedToken} • Modèle : ${lvl?.model || '?'}`;
+
+  // Tabs des niveaux
+  const tabs = $('conv-tabs');
+  tabs.innerHTML = '';
+  for (const L of LEVELS) {
+    const btn = document.createElement('button');
+    btn.className = 'admin-level-tab';
+    const p = progress.find(x => x.level_id === L.id);
+    if (p?.solved) btn.classList.add('solved');
+    if (selectedLevel === L.id) btn.classList.add('active');
+    btn.textContent = `L${L.id}`;
+    btn.title = L.name;
+    btn.addEventListener('click', () => { selectedLevel = L.id; loadConversation(); });
+    tabs.appendChild(btn);
+  }
+
+  // Charge messages + secret
+  let r;
+  try {
+    r = await api(`/admin/sessions/${selectedToken}/messages?level=${selectedLevel}`);
+  } catch (e) {
+    $('conv-body').innerHTML = `<div class="muted tiny">Impossible de charger : ${escape(e.message)}</div>`;
+    $('conv-secret').textContent = '';
+    return;
+  }
+
+  $('conv-secret').textContent = r.secret || '-';
+
+  const body = $('conv-body');
+  body.innerHTML = '';
+  if (!r.messages.length) {
+    body.innerHTML = '<div class="muted upper" style="padding: 20px 0;">Aucun message pour le moment.</div>';
+  } else {
+    for (const m of r.messages) {
+      if (m.role === 'hint') {
+        const d = document.createElement('div');
+        d.className = 'bubble bubble-hint';
+        d.textContent = m.content;
+        body.appendChild(d);
+        continue;
+      }
+      const row = document.createElement('div');
+      row.className = `bubble-row ${m.role}`;
+      const label = document.createElement('div');
+      label.className = 'bubble-label';
+      label.textContent = m.role === 'user' ? '→ élève' : '← assistant';
+      const bubble = document.createElement('div');
+      bubble.className = `bubble bubble-${m.role}`;
+      if (m.role === 'assistant' && m.content.includes('\n') && /^[A-Za-z_-]+:/m.test(m.content)) {
+        bubble.classList.add('mono-content');
+      }
+      bubble.textContent = m.content;
+      row.appendChild(label);
+      row.appendChild(bubble);
+      body.appendChild(row);
+    }
+    body.scrollTop = body.scrollHeight;
+  }
+
+  // Tentatives de validation
+  if (r.attempts_log && r.attempts_log.length) {
+    const sep = document.createElement('div');
+    sep.className = 'muted tiny';
+    sep.style.marginTop = '8px';
+    sep.style.borderTop = '1px dashed var(--border)';
+    sep.style.paddingTop = '6px';
+    sep.textContent = 'Tentatives de validation';
+    body.appendChild(sep);
+    for (const a of r.attempts_log) {
+      const d = document.createElement('div');
+      d.className = 'tiny';
+      d.style.color = a.correct ? 'var(--green)' : 'var(--red)';
+      d.textContent = `${a.correct ? '✓' : '✗'} « ${a.guess} »`;
+      body.appendChild(d);
+    }
+    body.scrollTop = body.scrollHeight;
+  }
+}
+
+$('hint-send').addEventListener('click', sendHint);
+$('hint-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendHint(); });
+$('conv-reset').addEventListener('click', resetLevel);
+$('conv-back').addEventListener('click', hideConvMobile);   // retour vers la liste sessions (mobile uniquement)
+
+async function resetLevel() {
+  if (!selectedToken || !selectedLevel) return;
+  const lvl = LEVELS.find(l => l.id === selectedLevel);
+  const sess = [...students, ...demoSessions].find(s => s.token === selectedToken);
+  const name = sess?.name || sess?.token;
+  const ok = confirm(
+    `Réinitialiser le niveau ${selectedLevel} (${lvl?.name || ''}) pour ${name} ?\n\n` +
+    `Cela va :\n` +
+    `• Régénérer un nouveau secret\n` +
+    `• Effacer tous les messages de ce niveau\n` +
+    `• Effacer toutes les tentatives de validation\n` +
+    `• Marquer le niveau comme non résolu`
+  );
+  if (!ok) return;
+  try {
+    await api(`/admin/sessions/${selectedToken}/levels/${selectedLevel}/reset`, { method: 'POST' });
+    await refreshSessions();
+  } catch (e) {
+    alert('Erreur : ' + e.message);
+  }
+}
+
+async function sendHint() {
+  const text = $('hint-input').value.trim();
+  if (!text || !selectedToken || !selectedLevel) return;
+  try {
+    await api(`/admin/sessions/${selectedToken}/hint`, {
+      method: 'POST',
+      body: JSON.stringify({ level_id: selectedLevel, text }),
+    });
+    $('hint-input').value = '';
+    await loadConversation();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+// ============================================================
+//  TOKEN GENERATION
+// ============================================================
+$('new-token-btn').addEventListener('click', async () => {
+  try {
+    const r = await api('/admin/tokens', { method: 'POST' });
+    $('token-popup-value').textContent = r.token;
+    show('token-popup');
+    await refreshSessions();
+  } catch (e) { alert(e.message); }
+});
+
+$('token-close').addEventListener('click', () => hide('token-popup'));
+$('token-copy').addEventListener('click', async () => {
+  await navigator.clipboard.writeText($('token-popup-value').textContent);
+  $('token-copy').textContent = 'Copié ✓';
+  setTimeout(() => { $('token-copy').textContent = 'Copier'; }, 1500);
+});
+
+$('reset-demo-btn').addEventListener('click', async () => {
+  if (!confirm('Réinitialiser la démo ? Tout l\'historique de la session démo sera effacé.')) return;
+  try {
+    await api('/admin/demo/reset', { method: 'POST' });
+    await refreshSessions();
+  } catch (e) { alert(e.message); }
+});
+
+$('clean-revoked-btn').addEventListener('click', async () => {
+  const n = students.filter(s => s.revoked).length;
+  if (n === 0) return;
+  if (!confirm(`Supprimer DÉFINITIVEMENT ${n} session(s) révoquée(s) ainsi que tout leur historique (messages, tentatives, progression) ?\n\nCette action est irréversible et fera disparaître ces élèves du scoreboard.`)) return;
+  try {
+    const r = await api('/admin/sessions/revoked', { method: 'DELETE' });
+    await refreshSessions();
+    if (selectedToken && r.tokens && r.tokens.includes(selectedToken)) {
+      selectedToken = null; selectedLevel = null;
+      hide('conv-view'); show('conv-empty'); hideConvMobile();
+    }
+  } catch (e) { alert(e.message); }
+});
+
+// ============================================================
+//  PROGRESS TABLE
+// ============================================================
+function renderProgressTable() {
+  const wrap = $('progress-table-wrap');
+  if (!wrap) return; // colonne progression retirée
+  const sessions = currentTab === 'demo' ? demoSessions : students;
+  if (!sessions.length) {
+    wrap.innerHTML = '<div class="muted tiny">Aucune session.</div>';
+    return;
+  }
+  let html = '<table class="matrix-table"><thead><tr><th>Élève</th>';
+  for (const L of LEVELS) html += `<th>${L.id}</th>`;
+  html += '</tr></thead><tbody>';
+  for (const s of sessions) {
+    const name = s.name || (s.is_demo ? 'Démo' : s.token);
+    html += `<tr><td>${escape(name)}<div class="cell-detail">${escape(s.token)}</div></td>`;
+    for (const L of LEVELS) {
+      const p = (s.progress || []).find(x => x.level_id === L.id);
+      let cls = 'cell-locked';
+      let mark = '·';
+      if (p) {
+        if (p.solved) { cls = 'cell-solved'; mark = '✓'; }
+        else { cls = 'cell-current'; mark = '●'; }
+      }
+      const detail = p
+        ? `<span class="cell-detail">${p.attempts || 0}t • ${p.hints_received || 0}i</span>`
+        : '';
+      html += `<td class="${cls}">${mark}${detail}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  html += '<div class="tiny muted" style="margin-top: 6px;">Légende : ✓ résolu · ● en cours · t = tentatives · i = indices</div>';
+  wrap.innerHTML = html;
+}
+
+function renderModelsList() {
+  const el = $('models-list');
+  if (!el) return; // colonne progression retirée
+  el.innerHTML = LEVELS.map(L => `<div><b>${L.id}.</b> ${escape(L.name)} → <code>${escape(L.model)}</code></div>`).join('');
+}
+
+// ============================================================
+//  EXPORT
+// ============================================================
+$('export-btn').addEventListener('click', () => {
+  window.location.href = '/admin/export.csv';
+});
+
+// ============================================================
+//  CHEATSHEET (modal + mini-renderer markdown)
+// ============================================================
+let cheatsheetRaw = null;
+let cheatsheetMode = 'rendered';   // 'rendered' | 'raw'
+
+$('cheatsheet-btn').addEventListener('click', openCheatsheet);
+$('cheatsheet-close').addEventListener('click', () => hide('cheatsheet-modal'));
+$('cheatsheet-raw').addEventListener('click', () => {
+  cheatsheetMode = cheatsheetMode === 'rendered' ? 'raw' : 'rendered';
+  $('cheatsheet-raw').textContent = cheatsheetMode === 'rendered' ? 'Voir brut' : 'Voir rendu';
+  renderCheatsheet();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') hide('cheatsheet-modal');
+});
+
+async function openCheatsheet() {
+  if (cheatsheetRaw === null) {
+    try {
+      const res = await fetch('/admin/cheatsheet', { credentials: 'same-origin' });
+      if (!res.ok) throw new Error(res.statusText);
+      cheatsheetRaw = await res.text();
+    } catch (e) {
+      alert('Impossible de charger la cheatsheet : ' + e.message);
+      return;
+    }
+  }
+  renderCheatsheet();
+  show('cheatsheet-modal');
+  $('cheatsheet-body').scrollTop = 0;
+}
+
+function renderCheatsheet() {
+  if (cheatsheetMode === 'raw') {
+    const pre = document.createElement('pre');
+    pre.textContent = cheatsheetRaw;
+    $('cheatsheet-body').innerHTML = '';
+    $('cheatsheet-body').appendChild(pre);
+  } else {
+    $('cheatsheet-body').innerHTML = mdToHtml(cheatsheetRaw);
+  }
+}
+
+// Mini-renderer markdown : suffisant pour la cheatsheet (pas de dépendance externe).
+function mdToHtml(md) {
+  const lines = md.replace(/\r/g, '').split('\n');
+  const out = [];
+  let i = 0;
+
+  // Helper : escape HTML
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  // C7 : transformations inline. Le contenu reçu en entrée a DÉJÀ été
+  // escapé par esc() en amont, donc les `<`/`>`/`&`/`"` sont déjà sous
+  // forme &lt;/&gt;/&amp;/&quot;. On ne doit JAMAIS dé-escaper les groupes
+  // capturés (sinon XSS via `[<img onerror=...>](javascript:...)`).
+  // Et on whitelist les schémas d'URL pour bloquer javascript:/data:.
+  const safeUrl = (u) => {
+    // u est déjà escapé (entité-encoded) → on travaille sur la version « brute »
+    // pour le test de schéma uniquement, sans la réinjecter.
+    const raw = u
+      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    return /^(https?:|mailto:|#|\/(?!\/))/i.test(raw.trim()) ? u : '#';
+  };
+  const inline = (s) => {
+    return s
+      // code inline : on ré-escape le contenu pour neutraliser tout HTML
+      .replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`)
+      // bold/italic : on garde les groupes tels quels (déjà escapés)
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|[\s(])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+      // links avec URL whitelistée
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g,
+        (_, label, url) => `<a href="${safeUrl(url)}" target="_blank" rel="noopener noreferrer">${label}</a>`);
+  };
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Code block
+    if (line.startsWith('```')) {
+      i++;
+      const buf = [];
+      while (i < lines.length && !lines[i].startsWith('```')) {
+        buf.push(lines[i]);
+        i++;
+      }
+      i++; // skip closing ```
+      out.push(`<pre><code>${esc(buf.join('\n'))}</code></pre>`);
+      continue;
+    }
+
+    // Headers
+    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    if (h) {
+      const level = h[1].length;
+      out.push(`<h${level}>${inline(esc(h[2]))}</h${level}>`);
+      i++;
+      continue;
+    }
+
+    // Horizontal rule
+    if (/^---+$/.test(line.trim())) {
+      out.push('<hr>');
+      i++;
+      continue;
+    }
+
+    // Blockquote
+    if (line.startsWith('>')) {
+      const buf = [];
+      while (i < lines.length && lines[i].startsWith('>')) {
+        buf.push(lines[i].replace(/^>\s?/, ''));
+        i++;
+      }
+      out.push(`<blockquote>${inline(esc(buf.join(' ')))}</blockquote>`);
+      continue;
+    }
+
+    // Table (markdown style)
+    if (line.trim().startsWith('|') && i + 1 < lines.length && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i+1])) {
+      const headerCells = line.split('|').slice(1, -1).map(c => c.trim());
+      i += 2; // skip separator
+      const rows = [];
+      while (i < lines.length && lines[i].trim().startsWith('|')) {
+        rows.push(lines[i].split('|').slice(1, -1).map(c => c.trim()));
+        i++;
+      }
+      let html = '<table><thead><tr>';
+      for (const c of headerCells) html += `<th>${inline(esc(c))}</th>`;
+      html += '</tr></thead><tbody>';
+      for (const row of rows) {
+        html += '<tr>';
+        for (const c of row) html += `<td>${inline(esc(c))}</td>`;
+        html += '</tr>';
+      }
+      html += '</tbody></table>';
+      out.push(html);
+      continue;
+    }
+
+    // Bullet list
+    if (/^\s*[-*]\s+/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) {
+        const content = lines[i].replace(/^\s*[-*]\s+/, '');
+        // on agrège les lignes de continuation indentées (texte multiligne d'un item)
+        i++;
+        const cont = [];
+        while (i < lines.length && /^\s{2,}\S/.test(lines[i]) && !/^\s*[-*]\s+/.test(lines[i])) {
+          cont.push(lines[i].trim());
+          i++;
+        }
+        items.push(content + (cont.length ? ' ' + cont.join(' ') : ''));
+      }
+      let html = '<ul>';
+      for (const it of items) html += `<li>${inline(esc(it))}</li>`;
+      html += '</ul>';
+      out.push(html);
+      continue;
+    }
+
+    // Empty line
+    if (line.trim() === '') {
+      i++;
+      continue;
+    }
+
+    // Paragraph (consume consecutive non-special lines)
+    const buf = [];
+    while (i < lines.length && lines[i].trim() !== ''
+      && !lines[i].startsWith('#')
+      && !lines[i].startsWith('```')
+      && !lines[i].startsWith('>')
+      && !lines[i].trim().startsWith('|')
+      && !/^\s*[-*]\s+/.test(lines[i])
+      && !/^---+$/.test(lines[i].trim())) {
+      buf.push(lines[i]);
+      i++;
+    }
+    if (buf.length) out.push(`<p>${inline(esc(buf.join(' ')))}</p>`);
+  }
+
+  return out.join('\n');
+}
+
+// ============================================================
+//  WEBSOCKET (broadcast events)
+// ============================================================
+let wsRetries = 0;
+function openWebSocket() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/admin/ws/monitor`);
+  ws.onopen = () => {
+    wsRetries = 0;
+    $('ws-status').textContent = 'WS connecté';
+  };
+  ws.onclose = () => {
+    $('ws-status').textContent = 'WS déconnecté';
+    const delay = Math.min(30000, 1000 * Math.pow(2, wsRetries++));
+    setTimeout(openWebSocket, delay);
+  };
+  ws.onmessage = (ev) => {
+    try {
+      const data = JSON.parse(ev.data);
+      handleWsEvent(data);
+    } catch {}
+  };
+}
+
+async function handleWsEvent(data) {
+  switch (data.event) {
+    case 'message':
+      if (data.token === selectedToken && data.level_id === selectedLevel) {
+        await loadConversation();
+      } else {
+        unreadByToken.add(data.token);
+        renderSessionLists();
+      }
+      // refresh table en fond
+      await refreshSessionsLight();
+      break;
+    case 'attempt':
+    case 'solved':
+      await refreshSessions();
+      break;
+    case 'session_created':
+    case 'session_revoked':
+    case 'session_restored':
+    case 'sessions_cleaned':
+    case 'session_login':
+    case 'demo_reset':
+    case 'level_reset':
+      await refreshSessions();
+      break;
+    case 'help_acquitted':
+      helpByToken.delete(data.token);
+      renderSessionLists();
+      break;
+    case 'help_requested':
+      helpByToken.set(data.token, data.level_id);
+      renderSessionLists();
+      // Petit signal sonore + flash titre pour l'admin (best-effort)
+      try {
+        const oldTitle = document.title;
+        document.title = '✋ Aide demandée : ' + oldTitle;
+        setTimeout(() => { document.title = oldTitle; }, 8000);
+      } catch {}
+      break;
+  }
+}
+
+async function refreshSessionsLight() {
+  // Recharge silencieusement les sessions pour mettre à jour la matrice de progression
+  try {
+    const r = await api('/admin/sessions');
+    students = r.students;
+    demoSessions = r.demo;
+    renderProgressTable();
+  } catch {}
+}
+
+// ============================================================
+//  GO
+// ============================================================
+tryAdmin();
+</script>
+</body>
+</html>
